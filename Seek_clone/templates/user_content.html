@@ -1,0 +1,494 @@
+{% extends "user_base.html" %}
+{% block title %} Course {{ course_name }} {% endblock %}
+{% block content %}
+
+<link rel="stylesheet" href="{{ url_for('static', filename='css/user_content.css') }}">
+<div class="row">
+    <div class="col-sm-6 col-lg-8">{{ usr_usrname }}</div>
+</div>
+<div class="row">
+    <div class="col-md-3">
+        <div class="list-group">
+            {% if content %}
+                {% for item in content %}
+                    <a href="?selected={{ item.content_id }}" class="list-group-item list-group-item-action {% if selected_content and item.content_id == selected_content.content_id %}active{% endif %}">
+                        {{ item.content_name }}
+                    </a>
+                {% endfor %}
+                <div style="padding: 10px; background-color: white; color: black;"><a href="/dashboard/course/1/GA1" target="_blank">Graded Assignment 1</a></div>
+
+                {% for mcq in mcq_assignments %}
+                    <a href="?selected_mcq={{ mcq.id }}" class="list-group-item list-group-item-action {% if selected_mcq and mcq.id == selected_mcq.id %}active{% endif %}">
+                        {{ mcq.content_name }}
+                    </a>
+                {% endfor %}
+                
+                {% for coding_q in coding_questions %}
+                    <a href="?selected_coding={{ coding_q.question_id }}" class="list-group-item list-group-item-action {% if selected_coding and coding_q.question_id == selected_coding.question_id %}active{% endif %}">
+                        {{ coding_q.content_name }}
+                    </a>
+                {% endfor %}
+                
+                {% for subjective in subjective_questions %}
+                    <a href="?selected_subjective={{ subjective.question_id }}" class="list-group-item list-group-item-action {% if selected_subjective and subjective.question_id == selected_subjective.question_id %}active{% endif %}">
+                        {{ subjective.content_name }}
+                    </a>
+                {% endfor %}
+            {% else %}
+                <div class="list-group-item mb-3" style="border: 1px solid #ddd;">
+                    No content available
+                </div>
+            {% endif %}
+        </div>
+    </div>
+    <div class="col-md-9">
+        {% if selected_content %}
+            <div class="content-container">
+                <div class="d-flex w-100 justify-content-between mb-3" style="border-bottom: 1px solid #ccc; padding-bottom: 10px;">
+                    <h5 class="mb-1" style="border: 1px solid #ccc; padding: 5px 10px; background-color: #f8f8f8;">{{ selected_content.content_name }}</h5>
+                </div>
+                <div class="d-flex justify-content-center mb-3">
+                    <div style="position: relative; width: 100%; max-width: 1000px; padding-bottom: 40%; height: 0; overflow: hidden; border: 1px solid #ccc;">
+                        <iframe id="videoFrame" data-content-id="{{ selected_content.content_id }}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;" src="https://www.youtube.com/embed/{{ selected_content.content_link }}" frameborder="0" allowfullscreen></iframe>
+                    </div>
+                </div>
+                <p class="mb-1" style="border-top: 1px solid #ccc; padding-top: 10px;">{{ selected_content.content_assignment }}</p>
+                <form id="promptForm">
+                    <div class="form-group">
+                        <label for="prompt">Write your Prompt here:</label>
+                        <textarea class="form-control" id="prompt" name="prompt" rows="3"></textarea>
+                    </div>
+                    <button type="button" class="btn btn-primary" onclick="sendPromptWithTranscript()">Ask From Video</button>
+                    <button type="button" class="btn btn-secondary" onclick="sendPromptWithoutTranscript()">Ask From Web</button>
+                </form>
+            </div>
+            <div class="content-container mt-3">
+                <h5>Prompt Answer:</h5>
+                <textarea class="form-control" id="answer" name="answer" rows="3" readonly></textarea>
+            </div>
+        {% elif selected_mcq %}
+            {% for mcq in mcq_assignments %}
+                <div class="content-container">
+                    <div class="d-flex w-100 justify-content-between mb-3" style="border-bottom: 1px solid #ccc; padding-bottom: 10px;">
+                        <h5 class="mb-1" style="border: 1px solid #ccc; padding: 5px 10px; background-color: #f8f8f8;">{{ mcq.question }}</h5>
+                    </div>
+                    <div class="mb-3">
+                        <p>Options:</p>
+                        <ul id="mcq-options-{{ mcq.id }}" data-correct-answer="{{ mcq.correct_answer }}">
+                            <li class="mcq-option" data-answer="A">
+                                <input type="radio" name="mcq_{{ mcq.id }}" value="A">
+                                <label>{{ mcq.option_a }}</label>
+                            </li>
+                            <li class="mcq-option" data-answer="B">
+                                <input type="radio" name="mcq_{{ mcq.id }}" value="B">
+                                <label>{{ mcq.option_b }}</label>
+                            </li>
+                            <li class="mcq-option" data-answer="C">
+                                <input type="radio" name="mcq_{{ mcq.id }}" value="C">
+                                <label>{{ mcq.option_c }}</label>
+                            </li>
+                            <li class="mcq-option" data-answer="D">
+                                <input type="radio" name="mcq_{{ mcq.id }}" value="D">
+                                <label>{{ mcq.option_d }}</label>
+                            </li>
+                        </ul>
+                    </div>
+                    <p id="feedback-{{ mcq.id }}" style="display: none;"><strong>Feedback:</strong> <span id="feedback-text-{{ mcq.id }}"></span></p>
+                    <button type="button" class="btn btn-primary" onclick="sendQuestionsToAPI('{{ mcq.id }}')">Send Questions to API</button>
+                </div>
+            {% endfor %}
+        {% elif selected_coding %}
+            <div class="content-container">
+                <h5>Coding Question:</h5>
+                <p id="coding-question">{{ selected_coding.coding_question }}</p>
+                <div id="editor" style="height: 600px; width: 100%;"></div>
+                <textarea id="coding-answer" name="coding_answer" style="display:none;"></textarea>
+                <button type="button" class="btn btn-primary mt-3" onclick="sendCodingQuestionToAPI()">Get Answer</button>
+                <button type="button" class="btn btn-secondary mt-3" onclick="sendCodingQuestionAndInputToAPI()">Get Hint</button>
+                <button type="button" class="btn btn-secondary mt-3" onclick="checkCode()">Check Answer</button>
+                <div id="coding-answer-container" class="mt-3" style="display: none;">
+                    <h5>Answer:</h5>
+                    <textarea id="api-coding-response" class="form-control" rows="3" readonly></textarea>
+                </div>
+                <div id="feedback" style="display: none;">
+                    <p id="feedback-text"></p>
+                </div>
+            </div>
+        {% elif selected_subjective %}
+            <div class="content-container">
+                <h5>Subjective Question:</h5>
+                <p id="subjective-question">{{ selected_subjective.subjective_question }}</p>
+                <button type="button" class="btn btn-primary mt-3" onclick="sendSubjectiveQuestionToAPI()">Check Answer</button>
+                <div id="subjective-answer-container" class="mt-3">
+                    <h5>Answer:</h5>
+                    <textarea id="subjective-answer" class="form-control" rows="7"></textarea>
+                </div>
+                <!-- Feedback container is hidden initially -->
+                <div id="feedback-container" class="mt-3">
+                    <div class="feedback-box">
+                        <h5>Cohesiveness Feedback:</h5>
+                        <p id="cohesiveness-feedback"></p>
+                    </div>
+                    <div class="feedback-box">
+                        <h5>Grammar Feedback:</h5>
+                        <p id="grammar-feedback"></p>
+                    </div>
+                    <div class="feedback-box">
+                        <h5>Plagiarism check:</h5>
+                        <p id="plagiarism-feedback"></p>
+                    </div>
+                </div>
+            </div>
+        {% else %}
+            <div class="content-container">
+                <p>Please select an item from the list.</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+    
+
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log("Initializing ACE editor...");
+        var editor = ace.edit("editor");
+        editor.setTheme("ace/theme/monokai");
+        editor.session.setMode("ace/mode/python");
+        console.log("ACE editor initialized."); 
+        var correctAnswer = document.getElementById('mcq-options').dataset.correctAnswer.trim();
+
+        document.querySelectorAll('.mcq-option').forEach(function(option) {
+            option.addEventListener('click', function() {
+                var selectedAnswer = this.getAttribute('data-answer').trim();
+                var feedbackText = '';
+
+                // Ensure comparison as strings
+                if (selectedAnswer === correctAnswer) {
+                    feedbackText = 'Correct!';
+                } else {
+                    feedbackText = 'Incorrect! The correct answer is ' + correctAnswer;
+                }
+
+                document.getElementById('feedback-text').textContent = feedbackText;
+                document.getElementById('feedback').style.display = 'block';
+            });
+        });
+    });
+    
+    function sendPromptWithTranscript() {
+        var promptText = document.getElementById("prompt").value;
+        var contentId = document.getElementById("videoFrame").dataset.contentId;
+    
+        var xhr = new XMLHttpRequest();
+        xhr.open("POST", "/process_prompt", true);
+        xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+    
+        xhr.onreadystatechange = function () {
+            if (xhr.readyState === XMLHttpRequest.DONE) {
+                if (xhr.status === 200) {
+                    var jsonResponse = JSON.parse(xhr.responseText);
+                    var answerData = jsonResponse.Answer;
+    
+                    // Process and format the answer data
+                    var formattedAnswer = formatAnswerText(answerData);
+                    
+                    // Display the structured answer
+                    document.getElementById("answer").innerHTML = formattedAnswer;
+                    alert("Prompt submitted successfully.");
+                } else {
+                    alert("Failed to submit prompt: " + xhr.responseText);
+                }
+            }
+        };
+    
+        xhr.send("prompt=" + encodeURIComponent(promptText) + "&content_id=" + contentId);
+    }
+    
+    function sendPromptWithoutTranscript() {
+        var promptText = document.getElementById("prompt").value;
+    
+        var xhr = new XMLHttpRequest();
+        xhr.open("POST", "/process_web_prompt", true);
+        xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+    
+        xhr.onreadystatechange = function () {
+            if (xhr.readyState === XMLHttpRequest.DONE) {
+                console.log("Raw response:", xhr.responseText);
+                if (xhr.status === 200) {
+                    try {
+                        var jsonResponse = JSON.parse(xhr.responseText);
+                        console.log("Parsed response:", jsonResponse);
+                        var answerData = jsonResponse.Answer;
+    
+                        // Process and format the answer data
+                        var formattedAnswer = formatAnswerText(answerData);
+    
+                        document.getElementById("answer").innerHTML = formattedAnswer;
+                    } catch (e) {
+                        console.error("Error parsing response:", e);
+                        document.getElementById("answer").innerHTML = '<p>Error parsing response.</p>';
+                    }
+                } else {
+                    console.error("Failed to get answer. Status:", xhr.status, "Response:", xhr.responseText);
+                    document.getElementById("answer").innerHTML = '<p>Failed to get answer.</p>';
+                }
+            }
+        };
+    
+        xhr.send("prompt=" + encodeURIComponent(promptText));
+    }
+    
+    function formatAnswerText(text) {
+        // Remove Markdown characters like * _ # `
+        return text.replace(/[*_#`]/g, '');
+    }
+    
+    
+    function sendPromptWithoutTranscript_original_by_NAVDEEP() {
+        var promptText = document.getElementById("prompt").value;
+    
+        var xhr = new XMLHttpRequest();
+        xhr.open("POST", "/process_web_prompt", true);
+        xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+    
+        xhr.onreadystatechange = function () {
+            if (xhr.readyState === XMLHttpRequest.DONE) {
+                if (xhr.status === 200) {
+                    var jsonResponse = JSON.parse(xhr.responseText);
+                    var answerData = jsonResponse.Answer;
+    
+                    var answerHTML = ''; // Process and format the answer data
+                    if (answerData && answerData.sections) {
+                        answerData.sections.forEach(function (section) {
+                            answerHTML += '<div><strong>' + section.title + '</strong></div>';
+                            if (section.subsections) {
+                                section.subsections.forEach(function (subsection) {
+                                    answerHTML += '<div><strong>' + subsection.title + '</strong></div>';
+                                    if (subsection.content) {
+                                        answerHTML += '<ul>';
+                                        subsection.content.forEach(function (item) {
+                                            answerHTML += '<li>' + item + '</li>';
+                                        });
+                                        answerHTML += '</ul>';
+                                    }
+                                });
+                            } else if (section.content) {
+                                answerHTML += '<ul>';
+                                section.content.forEach(function (item) {
+                                    answerHTML += '<li>' + item + '</li>';
+                                });
+                                answerHTML += '</ul>';
+                            }
+                        });
+                    } else {
+                        answerHTML = '<p>No structured answer available for this prompt.</p>';
+                    }
+    
+                    document.getElementById("answer").innerHTML = answerHTML;
+                } else {
+                    alert("Failed to get answer: " + xhr.responseText);
+                }
+            }
+        };
+    
+        xhr.send("prompt=" + encodeURIComponent(promptText));
+    }
+  
+    function sendQuestionsToAPI() {
+        // Get the selected MCQ data
+        var selectedMCQ = {
+            question: document.querySelector('.list-group-item.active').textContent.trim(),
+            options: []
+        };
+
+        // Get all the MCQ options
+        var mcqOptions = document.querySelectorAll('.mcq-option');
+
+        // Loop through each option to collect the data
+        mcqOptions.forEach(function(option) {
+            var optionData = {
+                answer: option.getAttribute('data-answer').trim(),
+                optionText: option.querySelector('label').textContent.trim()
+            };
+            selectedMCQ.options.push(optionData);
+        });
+
+        // Prepare the data to send
+        var requestData = JSON.stringify(selectedMCQ);
+
+        // Create a new XMLHttpRequest object
+        var xhr = new XMLHttpRequest();
+
+        // Configure the request
+        xhr.open("POST", "your_external_api_endpoint_here", true);
+        xhr.setRequestHeader("Content-Type", "application/json");
+
+        // Define what happens on successful data submission
+        xhr.onreadystatechange = function () {
+            if (xhr.readyState === XMLHttpRequest.DONE && xhr.status === 200) {
+                // Handle success
+                var response = JSON.parse(xhr.responseText);
+                var outputDiv = document.getElementById('api-output');
+                outputDiv.innerHTML = '<h5>API Response:</h5><p>' + response + '</p>';
+                alert("Questions sent successfully!");
+            } else if (xhr.readyState === XMLHttpRequest.DONE) {
+                // Handle error
+                alert("Failed to send questions: " + xhr.responseText);
+            }
+        };
+
+        // Send the request with the MCQ data
+        xhr.send(requestData);
+    }
+
+    function sendCodingQuestionToAPI() {
+        var codingQuestion = document.getElementById("coding-question").textContent;
+        var code = ace.edit("editor").getValue(); // Get the code from ACE editor
+    
+        var xhr = new XMLHttpRequest();
+        xhr.open("POST", "/get_coding_answer", true);
+        xhr.setRequestHeader("Content-Type", "application/json");
+    
+        xhr.onreadystatechange = function () {
+            if (xhr.readyState === XMLHttpRequest.DONE) {
+                if (xhr.status === 200) {
+                    var jsonResponse = JSON.parse(xhr.responseText);
+                    var answer = jsonResponse.answer;
+    
+                    // Remove backticks for better display
+                    var cleanAnswer = answer.replace(/```/g, '');
+    
+                    // Update the answer textarea with the cleaned response
+                    document.getElementById("api-coding-response").value = cleanAnswer;
+                    document.getElementById("coding-answer-container").style.display = "block";
+                } else {
+                    alert("Failed to get answer: " + xhr.responseText);
+                }
+            }
+        };
+    
+        var data = JSON.stringify({
+            "coding_question": codingQuestion,
+            "code": code
+        });
+    
+        xhr.send(data);
+    }
+    
+    function sendCodingQuestionAndInputToAPI() {
+        var codingQuestion = document.getElementById("coding-question").textContent;
+        var additionalInput = ace.edit("editor").getValue(); // Get the code from ACE editor
+    
+        var xhr = new XMLHttpRequest();
+        xhr.open("POST", "/get_coding_hint", true);
+        xhr.setRequestHeader("Content-Type", "application/json");
+    
+        xhr.onreadystatechange = function () {
+            if (xhr.readyState === XMLHttpRequest.DONE) {
+                if (xhr.status === 200) {
+                    var jsonResponse = JSON.parse(xhr.responseText);
+                    var hint = jsonResponse.hint;
+    
+                    // Remove backticks for better display
+                    var cleanHint = hint.replace(/```/g, '');
+    
+                    // Update the answer textarea with the cleaned response
+                    document.getElementById("api-coding-response").value = cleanHint;
+                    document.getElementById("coding-answer-container").style.display = "block";
+                } else {
+                    alert("Failed to get hint: " + xhr.responseText);
+                }
+            }
+        };
+    
+        var data = JSON.stringify({
+            "coding_question": codingQuestion,
+            "additional_input": additionalInput
+        });
+    
+        xhr.send(data);
+    }
+    
+    function checkCode() {
+        var userCode = ace.edit("editor").getValue();
+        var testInput = [2, 3]; // Example input for the test case
+        var expectedOutput = 5; // Expected output for the test case
+    
+        var xhr = new XMLHttpRequest();
+        xhr.open("POST", "/check_code", true);
+        xhr.setRequestHeader("Content-Type", "application/json");
+    
+        xhr.onreadystatechange = function () {
+            if (xhr.readyState === XMLHttpRequest.DONE) {
+                if (xhr.status === 200) {
+                    var response = JSON.parse(xhr.responseText);
+                    var feedbackText = response.is_correct ? "Correct! " : "Incorrect! ";
+                    feedbackText += response.message;
+    
+                    document.getElementById('feedback-text').textContent = feedbackText;
+                    document.getElementById('feedback').style.display = 'block';
+                } else {
+                    alert("Failed to check code: " + xhr.responseText);
+                }
+            }
+        };
+    
+        var data = JSON.stringify({
+            "code": userCode,
+            "input": testInput,
+            "expected_output": expectedOutput
+        });
+    
+        xhr.send(data);
+    }
+    
+    
+    function sendSubjectiveQuestionToAPI() {
+            const subjectiveQuestion = document.getElementById('subjective-question').textContent;
+            const subjectiveAnswer = document.getElementById('subjective-answer').value;
+
+            const data = {
+                question: subjectiveQuestion,
+                answer: subjectiveAnswer
+            };
+
+            fetch('/evaluate_subjective', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok ' + response.statusText);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.response) {
+                    result_1 = data.response.cohesiveness_feedback.replace(/\n/g, '<br>');
+                    result_1 = formatAnswerText(result_1);
+                    document.getElementById('cohesiveness-feedback').innerHTML = result_1 || 'No cohesiveness feedback.';
+                    result_2 = data.response.grammar_feedback.replace(/\n/g, '<br>');
+                    result_2 = formatAnswerText(result_2)
+                    document.getElementById('grammar-feedback').innerHTML = result_2 || 'No grammar feedback.';
+                    result_3 = data.response.plagisrism_feedback.replace(/\n/g, '<br>');
+                    result_3 = formatAnswerText(result_3)
+                    document.getElementById('plagiarism-feedback').innerHTML = result_3 || 'No plagiarism feedback.';
+                    // Show the feedback container
+                    document.getElementById('feedback-container').style.display = 'block';
+                } else {
+                    document.getElementById('feedback-container').textContent = 'No response from API.';
+                }
+            })
+            .catch(error => {
+                console.error('There was a problem with the fetch operation:', error);
+                document.getElementById('feedback-container').textContent = 'Failed to get response from API.';
+            });
+        }
+
+
+</script>
+{% endblock %}
